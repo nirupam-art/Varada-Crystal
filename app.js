@@ -541,8 +541,8 @@ async function handleCheckoutFormSubmit(event) {
       prefill: {
         name: customerData.name,
         email: customerData.email,
-        contact: customerData.phone,
-        method: 'upi'
+        contact: customerData.phone
+        // Note: do NOT set prefill.method — it interferes with Razorpay's payment method selection UI
       },
       method: {
         upi: true,
@@ -569,17 +569,14 @@ async function handleCheckoutFormSubmit(event) {
       const rzp = new Razorpay(options);
       rzp.on('payment.failed', function (response) {
         resetPayButton();
-        showToast(`❌ Payment Failed: ${response.error.description || 'Transaction declined.'}`);
+        showToast(`❌ Payment Failed: ${response.error.description || 'Transaction declined. Please retry.'}`);
       });
       rzp.open();
     } else {
-      // Mock / Offline Test Fallback if SDK script isn't loaded
-      console.warn('Razorpay SDK script not found. Triggering test verification fallback...');
-      await verifyRazorpayPayment({
-        razorpay_order_id: orderData.order_id,
-        razorpay_payment_id: `pay_mock_${Date.now()}`,
-        razorpay_signature: `sig_mock_${Date.now()}`
-      }, customerData, orderData);
+      // Razorpay SDK failed to load — do NOT simulate a payment.
+      // Show a clear error so the customer knows payment is unavailable.
+      resetPayButton();
+      showToast('⚠️ Payment gateway unavailable. Please refresh the page or try a different browser.');
     }
 
   } catch (err) {
@@ -591,45 +588,43 @@ async function handleCheckoutFormSubmit(event) {
 
 async function verifyRazorpayPayment(rzpResponse, customerData, orderData) {
   try {
+    // Send ONLY the three Razorpay-returned fields to the backend.
+    // The server derives the expected amount from its own in-memory order store —
+    // we do NOT send amount/price here so the server can't be tricked.
     const verifyRes = await fetch('/api/verify-payment', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        razorpay_order_id: rzpResponse.razorpay_order_id,
+        razorpay_order_id:  rzpResponse.razorpay_order_id,
         razorpay_payment_id: rzpResponse.razorpay_payment_id,
-        razorpay_signature: rzpResponse.razorpay_signature,
-        order_details: {
-          items: cart,
-          customer: customerData,
-          amount_inr: orderData.amount_inr
-        }
+        razorpay_signature:  rzpResponse.razorpay_signature
       })
     });
 
     const verifyResult = await verifyRes.json();
 
     if (verifyRes.ok && verifyResult.success) {
-      // Clear Cart
+      // ✅ Backend confirmed payment — now safe to clear cart and show success
       cart = [];
       saveCartToStorage();
       renderCart();
 
-      // Show Success View
-      const formState = document.getElementById('checkoutFormState');
+      const formState    = document.getElementById('checkoutFormState');
       const successState = document.getElementById('checkoutSuccessState');
-      const detailsBox = document.getElementById('modalSuccessDetails');
+      const detailsBox   = document.getElementById('modalSuccessDetails');
 
-      if (formState) formState.style.display = 'none';
+      if (formState)    formState.style.display    = 'none';
       if (successState) successState.style.display = 'block';
 
       if (detailsBox) {
+        const paidINR = verifyResult.amountINR != null
+          ? `₹${Number(verifyResult.amountINR).toFixed(2)}`
+          : 'Confirmed';
         detailsBox.innerHTML = `
           <p style="margin-bottom:6px; color:#059669; font-weight:700;">✓ Transaction Verified</p>
           <p><strong>Payment ID:</strong> <span style="font-family:monospace; color:#FFF;">${verifyResult.paymentId}</span></p>
           <p><strong>Order ID:</strong> <span style="font-family:monospace; color:#FFF;">${verifyResult.orderId}</span></p>
-          <p><strong>Amount Paid:</strong> ₹${(orderData.amount_inr || 0).toFixed(2)}</p>
+          <p><strong>Amount Paid:</strong> ${paidINR}</p>
           <p><strong>Deliver To:</strong> ${customerData.name}, ${customerData.address}, ${customerData.city} - ${customerData.pincode}</p>
           <p><strong>Contact:</strong> ${customerData.phone} | ${customerData.email}</p>
         `;
@@ -637,12 +632,14 @@ async function verifyRazorpayPayment(rzpResponse, customerData, orderData) {
 
       showToast('🎉 Payment Verified & Order Confirmed!');
     } else {
-      throw new Error(verifyResult.error || 'Payment signature verification failed');
+      // ❌ Backend rejected — do NOT clear cart, do NOT show success
+      throw new Error(verifyResult.error || 'Payment verification failed. Please contact support.');
     }
   } catch (err) {
     console.error('Payment verification error:', err);
+    // Restore button so customer can retry — cart is preserved
     resetPayButton();
-    showToast(`❌ Verification Error: ${err.message}`);
+    showToast(`❌ ${err.message}`);
   }
 }
 
