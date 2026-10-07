@@ -4,7 +4,7 @@
   "description": "Varada Crystal Luxury Fragrance & Natural Mineral Care E-Commerce Store with Razorpay Payment Integration",
   "main": "api/index.js",
   "scripts": {
-    "start": "node api/index.js",
+    "start:local": "node api/index.js",
     "dev": "node --watch api/index.js"
   },
   "keywords": [
