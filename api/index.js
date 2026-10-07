@@ -80,7 +80,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Serve static frontend files
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname, '..')));
 
 // ---------------------------------------------------------------------------
 // GET /api/config
@@ -451,18 +451,23 @@ function handleWebhook(req, res) {
 // Fallback to index.html for unknown GET routes (SPA support)
 // ---------------------------------------------------------------------------
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 // ---------------------------------------------------------------------------
 // Start Server
 // ---------------------------------------------------------------------------
-app.listen(PORT, () => {
-  console.log('=======================================================');
-  console.log('✨ VARADA CRYSTAL E-COMMERCE SERVER RUNNING');
-  console.log(`🌐 Local URL: http://localhost:${PORT}`);
-  // Log only the public key — NEVER log keySecret
-  console.log(`💳 Razorpay Key ID: ${keyId}`);
-  console.log(`🔗 Webhook: ${webhookSecret ? 'Configured' : 'Not configured (set RAZORPAY_WEBHOOK_SECRET)'}`);
-  console.log('=======================================================');
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('=======================================================');
+    console.log('✨ VARADA CRYSTAL E-COMMERCE SERVER RUNNING');
+    console.log(`🌐 Local URL: http://localhost:${PORT}`);
+    // Log only the public key — NEVER log keySecret
+    console.log(`💳 Razorpay Key ID: ${keyId}`);
+    console.log(`🔗 Webhook: ${webhookSecret ? 'Configured' : 'Not configured (set RAZORPAY_WEBHOOK_SECRET)'}`);
+    console.log('=======================================================');
+  });
+}
+
+// Export the Express API for Vercel
+module.exports = app;

@@ -530,7 +530,7 @@ async function handleCheckoutFormSubmit(event) {
       currency: orderData.currency || 'INR',
       name: 'Varada Crystal',
       description: `Fragrance Order (#${orderData.order_id.slice(-6)})`,
-      image: 'logo-icon.svg',
+      image: '/logo-icon.svg',
       order_id: orderData.order_id,
       handler: async function (rzpResponse) {
         if (payBtn) {
